@@ -1,5 +1,4 @@
 import java.io.*;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Path;
@@ -9,13 +8,12 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class Scraper {
-    private static void InitializeDB (Date tTime, HashMap<String, URLInfo> ss) throws IOException {
-        Scanner dbScanner = new Scanner(new File("C:\\Users\\Midnight Toker\\Desktop\\Test Text Files\\storage.txt")).useDelimiter("\\|");
+    private static void InitializeDB (String storagePath, HashMap<String, URLInfo> ss) throws IOException {
+        Path sPath = Paths.get(storagePath, "storage.txt");
+        Scanner dbScanner = new Scanner(new File(sPath.toString())).useDelimiter("\\|");
         ArrayList<URLInfo> restoreList = new ArrayList<>(); // Array List of URLs from persistent storage to be restored
 
         while (dbScanner.hasNext()) {
-            tTime = new Date(System.currentTimeMillis());
-
             String urlLink = "", cType = "", lModified = "", cEncoding = "";
             int cLength = 0;
             long expir = 0;
@@ -42,38 +40,47 @@ public class Scraper {
             }
             restoreList.add(new URLInfo(urlLink, cType, cLength, lModified, expir, cEncoding));
         }
-        for (int i = 0; i < restoreList.size(); i++) {
-            ss.put(restoreList.get(i).getURL(), restoreList.get(i));
-        };
+        for (URLInfo urlInfo : restoreList) {
+            ss.put(urlInfo.getURL(), urlInfo);
+        }
         dbScanner.close();
     }
 
     // Main code
-    public static void main(String[] args) throws Exception, MalformedURLException, IOException {
+    public static void main(String[] args) throws Exception {
         HashMap<String, URLInfo> storageStructure = new HashMap<>(); // Storage structure to record information from desired inputs
         ArrayList<Transaction> transactionList = new ArrayList<>(); // Array List of transactions to be printed to the transaction log
 
         String oDirectory = ""; // Stores directory path for output location
+        String sDirectory; // Stores directory path for storage location
         String tType = "";
         Date tTime = new Date();
 
+        //Asks user to choose directory path for storage.txt to be created or where it already exists
+        Scanner storageSC = new Scanner(System.in);
+        System.out.println("Please enter the folder path in quotations of where your storage.txt is located or where you would like it to be created: ");
+
+        sDirectory = storageSC.nextLine();
+        sDirectory = sDirectory.substring(1, sDirectory.length() - 1);
+        System.out.print("\n");
+
         // Initializes DB from persistent storage for continuity purposes
-        InitializeDB(tTime, storageStructure);
+        InitializeDB(sDirectory, storageStructure);
 
         // Shows a list of flags and their input format/functionality
         System.out.println("Flags: ");
         System.out.println("-d [desired absolute destination path for output files in quotations]");
-        System.out.println("-o [all] or [Specific keyword in quotations]");
+        System.out.println("-o");
         System.out.println("-i [absolute file path of input text file in quotations]");
         System.out.println("-exit" + "\n");
 
-        String command ="";
-        while (!command.equals("-exit")) {
+        String exitSignal ="";
+        while (!exitSignal.equals("-exit")) {
             Scanner inputScanner = new Scanner(System.in);
             System.out.println("Please entered flag command (before any other flag is used, -d must be used to set output directory): ");
             String flag = inputScanner.next(); // Stores what flag the user inputted
             String argument = inputScanner.nextLine(); // Stores what flag specific command the user inputted
-            command = flag; // Variable used to check for -exit flag; signals program to terminate
+            exitSignal = flag; // Variable used to check for -exit flag; signals program to terminate
 
             // Checks if flag/command entered by the user is valid
             if (!flag.equals("-i") && !flag.equals("-o") && !flag.equals("-d") && !flag.equals("-exit")) {
@@ -97,7 +104,6 @@ public class Scraper {
                     Path iPath = Paths.get(argument.substring(2, argument.length() - 1));
                     Scanner webLink = new Scanner(new File(iPath.toString()));
                     Format dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    String webpage = null;
 
                     // Create a URL from the specified address, open a connection to it,
                     // and then display information about the URL.
@@ -120,13 +126,14 @@ public class Scraper {
 
                 // Updates storage structure with new URL info from input.txt,
                 // also makes sure duplicates don't get stored and recorded in the transaction log.
-                FileWriter db = new FileWriter("C:\\Users\\Midnight Toker\\Desktop\\Test Text Files\\storage.txt");
+                Path sPath = Paths.get(sDirectory, "storage.txt");
+                FileWriter db = new FileWriter(sPath.toString());
 
-                for (int i = 0; i < urlList.size(); i++) {
-                    if(!storageStructure.containsKey(urlList.get(i).getURL())) {
-                        transactionList.add(new Transaction(tTime, tType, urlList.get(i).getURL()));
+                for (URLInfo urlInfo : urlList) {
+                    if (!storageStructure.containsKey(urlInfo.getURL())) {
+                        transactionList.add(new Transaction(tTime, tType, urlInfo.getURL()));
                     }
-                    storageStructure.put(urlList.get(i).getURL(), urlList.get(i));
+                    storageStructure.put(urlInfo.getURL(), urlInfo);
                 }
                 for (Map.Entry<String, URLInfo> entry : storageStructure.entrySet()) {
                     db.write(entry.getValue().getURL() + "|" + entry.getValue().getContentType() + "|" + entry.getValue().getContentLength() + "|" + entry.getValue().getLastModified() + "|" + entry.getValue().getExpiration() + "|" + entry.getValue().getContentEncoding());
@@ -155,11 +162,12 @@ public class Scraper {
         //Prints transactions done in the session to transaction log within user-specified file path (from -d flag)
         Path tPath = Paths.get(oDirectory, "transactionLog.txt");
         FileWriter tLogWriter = new FileWriter(tPath.toString());
-        for (int i = 0; i < transactionList.size(); i++) {
-            tLogWriter.write(transactionList.get(i).getTransactionTime() + "|" + transactionList.get(i).transactionType + "|" + transactionList.get(i).getUrl());
+        for (Transaction transaction : transactionList) {
+            tLogWriter.write(transaction.getTransactionTime() + "|" + transaction.transactionType + "|" + transaction.getUrl());
             tLogWriter.write("\r\n");
         }
         tLogWriter.close();
+        storageSC.close();
     }
 
 }
