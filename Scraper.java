@@ -1,6 +1,9 @@
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.Format;
@@ -8,6 +11,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class Scraper {
+    // Initializes DB from persistent storage for continuity purposes
     private static void InitializeDB (String storagePath, HashMap<String, URLInfo> ss) throws IOException {
         Path sPath = Paths.get(storagePath, "storage.txt");
         Scanner dbScanner = new Scanner(new File(sPath.toString())).useDelimiter("\\|");
@@ -46,6 +50,25 @@ public class Scraper {
         dbScanner.close();
     }
 
+    public static BufferedReader read(String url) throws Exception {
+
+        return new BufferedReader(
+                new InputStreamReader(
+                        new URL(url).openStream()));
+
+    } // read
+
+
+    public static BufferedImage fetchImageFromURL (URL url) {
+        BufferedImage image = null;
+        try {
+            // Read from a URL
+            image = ImageIO.read(url);
+        } catch (IOException e) {
+        } // catch
+        return image;
+    } // fetchImageFromURL
+
     // Main code
     public static void main(String[] args) throws Exception {
         HashMap<String, URLInfo> storageStructure = new HashMap<>(); // Storage structure to record information from desired inputs
@@ -54,7 +77,7 @@ public class Scraper {
         String oDirectory = ""; // Stores directory path for output location
         String sDirectory; // Stores directory path for storage location
         String tType = "";
-        Date tTime = new Date();
+        Date tTime = new Date(); // Keeps track of the time a transaction is done
 
         //Asks user to choose directory path for storage.txt to be created or where it already exists
         Scanner storageSC = new Scanner(System.in);
@@ -74,10 +97,10 @@ public class Scraper {
         System.out.println("-i [absolute file path of input text file in quotations]");
         System.out.println("-exit" + "\n");
 
-        String exitSignal ="";
+        String exitSignal =""; // Variable used to check for -exit flag; signals program to terminate
         while (!exitSignal.equals("-exit")) {
             Scanner inputScanner = new Scanner(System.in);
-            System.out.println("Please entered flag command (before any other flag is used, -d must be used to set output directory): ");
+            System.out.println("Please enter flag command (before any other flag is used, -d must be used to set output directory): ");
             String flag = inputScanner.next(); // Stores what flag the user inputted
             String argument = inputScanner.nextLine(); // Stores what flag specific command the user inputted
             exitSignal = flag; // Variable used to check for -exit flag; signals program to terminate
@@ -150,8 +173,92 @@ public class Scraper {
                 tTime = new Date(System.currentTimeMillis());
 
                 for (Map.Entry<String, URLInfo> entry : storageStructure.entrySet()) {
-                    sOutput.write("URL: " + entry.getValue().getURL() + "|" + "Content Type: " + entry.getValue().getContentType() + "|" + "Content Length: " + entry.getValue().getContentLength() + "|" + "Last Modified: " + entry.getValue().getLastModified() + "|" + "Expiration: " + entry.getValue().getExpiration() + "|" + "Content Encoding: " + entry.getValue().getContentEncoding());
-                    sOutput.write("\r\n");
+                    int lineCount = 0;
+
+                    String webpage = entry.getValue().getURL(); // The URL in String format used to check file type
+                    String urlFileName = webpage.substring(webpage.lastIndexOf("/") + 1); // Used to extract last part of URL for file saving purposes
+                    URL url = new URL(webpage); // URL format of URL
+
+                    // Outputs image file of a certain type from url to output directory if it is an image
+                    if(entry.getValue().getContentType().equals("image/jpeg")) {
+                        Path imgPath = Paths.get(oDirectory, urlFileName);
+                        File outputImageFile = new File(imgPath.toString());
+                        ImageIO.write(fetchImageFromURL(url), "jpg", outputImageFile);
+
+                        //Retrieves file size
+                        long bytes = Files.size(imgPath);
+
+                        // Writes URL information to output file
+                        sOutput.write("URL: " + entry.getValue().getURL() + "|" + "File size: " + String.format("%,d bytes", bytes) + "|" + "Content Type: " + entry.getValue().getContentType() + "|" + "Content Length: " + entry.getValue().getContentLength() + "|" + "Last Modified: " + entry.getValue().getLastModified() + "|" + "Expiration: " + entry.getValue().getExpiration() + "|" + "Content Encoding: " + entry.getValue().getContentEncoding());
+                        sOutput.write("\r\n");
+                    }
+                    // Reads in txt files line by line then saves it
+                    else if(entry.getValue().getContentType().equals("text/plain")){
+                        Path pPath = Paths.get(oDirectory, (urlFileName));
+                        FileWriter pageWriter = new FileWriter(pPath.toString());
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()));
+
+                        String line = reader.readLine();
+                        while (line != null) {
+                            pageWriter.write(line);
+                            lineCount++;
+                            line = reader.readLine();
+                        }
+                        reader.close();
+                        pageWriter.close();
+
+                        //Retrieves file size
+                        long bytes = Files.size(pPath);
+
+                        // Writes URL information to output file
+                        sOutput.write("URL: " + entry.getValue().getURL() + "|" + "Line count: " + lineCount + "|" + "File size: " + String.format("%,d bytes", bytes) + "|" + "Content Type: " + entry.getValue().getContentType() + "|" + "Content Length: " + entry.getValue().getContentLength() + "|" + "Last Modified: " + entry.getValue().getLastModified() + "|" + "Expiration: " + entry.getValue().getExpiration() + "|" + "Content Encoding: " + entry.getValue().getContentEncoding());
+                        sOutput.write("\r\n");
+                    }
+                    // Reads in pdf or docx files from a URL then saves it to the output directory
+                    else if(entry.getValue().getContentType().equals("application/pdf")){
+                        Path pPath = Paths.get(oDirectory, (urlFileName));
+                        try (BufferedInputStream in = new BufferedInputStream(url.openStream());
+                             FileOutputStream fileOutputStream = new FileOutputStream(pPath.toString())) {
+                            byte dataBuffer[] = new byte[1024];
+                            int bytesRead;
+                            while ((bytesRead = in.read(dataBuffer, 0, 1024)) != -1) {
+                                fileOutputStream.write(dataBuffer, 0, bytesRead);
+                            }
+                        } catch (IOException e) {
+                            // handle exception
+                        }
+
+                        //Retrieves file size
+                        long bytes = Files.size(pPath);
+
+                        // Writes URL information to output file
+                        sOutput.write("URL: " + entry.getValue().getURL() + "|" + "File size: " + String.format("%,d bytes", bytes) + "|" + "Content Type: " + entry.getValue().getContentType() + "|" + "Content Length: " + entry.getValue().getContentLength() + "|" + "Last Modified: " + entry.getValue().getLastModified() + "|" + "Expiration: " + entry.getValue().getExpiration() + "|" + "Content Encoding: " + entry.getValue().getContentEncoding());
+                        sOutput.write("\r\n");
+                    }
+                    else {
+                        urlFileName = urlFileName + ".html";
+                        Path pPath = Paths.get(oDirectory, (urlFileName));
+                        FileWriter pageWriter = new FileWriter(pPath.toString());
+                        BufferedReader reader = read(webpage);
+
+                        String line = reader.readLine();
+                        while (line != null) {
+                            pageWriter.write(line);
+                            lineCount++;
+                            line = reader.readLine();
+                        }
+                        pageWriter.close();
+                        reader.close();
+
+                        //Retrieves file size
+                        long bytes = Files.size(pPath);
+
+                        // Writes URL information to output file
+                        sOutput.write("URL: " + entry.getValue().getURL() + "|" + "Line count: " + lineCount + "|" + "File size: " + String.format("%,d bytes", bytes) + "|" + "Content Type: " + entry.getValue().getContentType() + "|" + "Content Length: " + entry.getValue().getContentLength() + "|" + "Last Modified: " + entry.getValue().getLastModified() + "|" + "Expiration: " + entry.getValue().getExpiration() + "|" + "Content Encoding: " + entry.getValue().getContentEncoding());
+                        sOutput.write("\r\n");
+                    }
+
+                    // Adds to transaction list
                     transactionList.add(new Transaction(tTime, tType, entry.getValue().getURL()));
                 }
                 System.out.print("\n");

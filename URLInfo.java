@@ -1,10 +1,8 @@
-import java.util.Date;
-
 public class URLInfo {
-    String URL;
-    String contentType;
-    int contentLength;
-    String lastModified;
+    String URL; // The URL itself
+    String contentType; // The type of content pertaining to the URL
+    int contentLength; // Length of the content
+    String lastModified; // Last time the page has been modified
     long expiration;
     String contentEncoding;
 
